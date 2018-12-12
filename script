@@ -1,0 +1,1 @@
+python transform_video.py --in-path videos/bitchlasagna.mp4 --checkpoint ckpt/scream.ckpt --out-path styled-videps/video.mp4 --batch-size 4
