@@ -11,8 +11,11 @@ import time
 import json
 import subprocess
 import numpy
+import cv2
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import moviepy.video.io.ffmpeg_writer as ffmpeg_writer
+from PIL import Image
+import numpy as np
 
 BATCH_SIZE = 4
 DEVICE = '/gpu:0'
@@ -67,6 +70,34 @@ def ffwd_video(path_in, path_out, checkpoint_dir, device_t='/gpu:0', batch_size=
 
         video_writer.close()
 
+def preprocess(img):
+  imgpre = np.copy(img)
+  # bgr to rgb
+  imgpre = imgpre[...,::-1]
+  # shape (h, w, d) to (1, h, w, d)
+  imgpre = imgpre[np.newaxis,:,:,:]
+  imgpre -= np.array([123.68, 116.779, 103.939]).reshape((1,1,1,3))
+  return imgpre
+
+def postprocess(img):
+  imgpost = np.copy(img)
+  imgpost += np.array([123.68, 116.779, 103.939]).reshape((1,1,1,3))
+  # shape (1, h, w, d) to (h, w, d)
+  imgpost = imgpost[0]
+  imgpost = np.clip(imgpost, 0, 255).astype('uint8')
+  # rgb to bgr
+  imgpost = imgpost[...,::-1]
+  return imgpost
+
+def load_image(path) :
+    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = img.astype(np.uint8)
+    img = preprocess(img)
+    return img
+   
+def write_image(path, img):
+  img = postprocess(img)
+  cv2.imwrite(path, img)
 
 # get img_shape
 def ffwd(data_in, paths_out, checkpoint_dir, device_t='/gpu:0', batch_size=4):
@@ -173,6 +204,15 @@ def build_parser():
     parser.add_argument('--allow-different-dimensions', action='store_true',
                         dest='allow_different_dimensions', 
                         help='allow different image dimensions')
+    
+    parser.add_argument('--original-colors', action='store_true',
+                        dest='og_colors', 
+                        help='restore original colors')
+    
+    parser.add_argument('--color-convert-type', type=str,
+                        dest="color_type",
+                        default='yuv',
+                        help='Color space for conversion to original colors (default: %(default)s)')
 
     return parser
 
@@ -197,16 +237,66 @@ def main():
 
         ffwd_to_img(opts.in_path, out_path, opts.checkpoint_dir,
                     device=opts.device)
+        
+        if opts.og_colors:
+            print(opts.in_path)
+            print(out_path)
+            content_img = postprocess(load_image(opts.in_path))
+            stylized_img = postprocess(load_image(out_path))
+            #content_img  = preprocess(load_image(opts.in_path))
+            #stylized_img = preprocess(load_image(out_path))
+            write_image("drive/STYLE_CKPT/test_sty.jpg",stylized_img)
+            write_image("drive/STYLE_CKPT/test_cont.jpg",content_img)
+            c1, _, _ = cv2.split(stylized_img)
+            _, c2, c3 = cv2.split(content_img)
+            merged = cv2.merge((c1, c2, c3))
+            #merged = cv2.addWeighted(c1,0.333, c2,0.333, c3,0.333)
+            dst = cv2.cvtColor(merged, inv_cvt_type).astype(np.float32)
+            dst = preprocess(dst)
+            write_image(out_path,dst)
+            
     else:
         files = list_files(opts.in_path)
         full_in = [os.path.join(opts.in_path,x) for x in files]
         full_out = [os.path.join(opts.out_path,x) for x in files]
+        print(full_in)
+        print(full_out)
         if opts.allow_different_dimensions:
             ffwd_different_dimensions(full_in, full_out, opts.checkpoint_dir, 
                     device_t=opts.device, batch_size=opts.batch_size)
         else :
             ffwd(full_in, full_out, opts.checkpoint_dir, device_t=opts.device,
                     batch_size=opts.batch_size)
+            
+        if opts.og_colors:
+            content_img = postprocess(load_image(full_in))
+            stylized_img = postprocess(load_image(full_out))
+            #content_img  = postprocess(content_img)
+            #stylized_img = postprocess(stylized_img)
+            if opts.color_type == 'yuv':
+                cvt_type = cv2.COLOR_BGR2YUV
+                inv_cvt_type = cv2.COLOR_YUV2BGR
+            elif opts.color_type == 'ycrcb':
+                cvt_type = cv2.COLOR_BGR2YCR_CB
+                inv_cvt_type = cv2.COLOR_YCR_CB2BGR
+            elif opts.color_type == 'luv':
+                cvt_type = cv2.COLOR_BGR2LUV
+                inv_cvt_type = cv2.COLOR_LUV2BGR
+            elif opts.color_type == 'lab':
+                cvt_type = cv2.COLOR_BGR2LAB
+                inv_cvt_type = cv2.COLOR_LAB2BGR
+            content_cvt = cv2.cvtColor(content_img, cvt_type)
+            stylized_cvt = cv2.cvtColor(stylized_img, cvt_type)
+            write_image("drive/STYLE_CKPT/test_sty.jpg",stylized_cvt)
+            write_image("drive/STYLE_CKPT/test_cont.jpg",content_cvt)
+            c1, _, _ = cv2.split(stylized_cvt)
+            _, c2, c3 = cv2.split(content_cvt)
+            merged = cv2.merge((c1, c2, c3))
+            #merged = cv2.addWeighted(c1,0.333, c2,0.333, c3,0.333)
+            dst = cv2.cvtColor(merged, inv_cvt_type).astype(np.float32)
+            dst = preprocess(dst)
+            write_image(full_out,dst)
+            
 
 if __name__ == '__main__':
     main()
