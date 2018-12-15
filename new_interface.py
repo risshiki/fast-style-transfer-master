@@ -89,7 +89,7 @@ class Window(QtGui.QMainWindow):
         if original_colors == True:
             script = script + " --original_colors True"
         #print(script)
-        subprocess.call(script)
+        subprocess.call(script, shell=True)
         self.button.setText("Done")
 
 
