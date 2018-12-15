@@ -39,6 +39,10 @@ def build_parser():
     parser.add_argument('--no-disk', type=bool, dest='no_disk',
                         help='Don\'t save intermediate files to disk. Default False',
                         metavar='NO_DISK', default=False)
+
+    parser.add_argument('--original-colors', type=bool, dest='original_colors',
+                        help='Saves original colors',
+                        metavar='NO_DISK', default=False)
     return parser
 
 def check_opts(opts):
@@ -48,7 +52,7 @@ def check_opts(opts):
 def main():
     parser = build_parser()
     opts = parser.parse_args()
-    evaluate.ffwd_video(opts.in_path, opts.out, opts.checkpoint, opts.device, opts.batch_size)
+    evaluate.ffwd_video(opts.in_path, opts.out, opts.checkpoint, opts.device, opts.batch_size, opts.original_colors)
 
  
 if __name__ == '__main__':
