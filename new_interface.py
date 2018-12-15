@@ -1,9 +1,12 @@
 import sys
 from PyQt4 import QtGui, QtCore
+from PyQt4.QtCore import QProcess
 import subprocess
 
-file_location = None
-check_location = None
+
+
+# file_location = None
+# check_location = None
 original_colors = True
 
 
@@ -76,18 +79,22 @@ class Window(QtGui.QMainWindow):
         file = open(name,'r')
 
         with file:
-            file_location = name
+            check_location = name
             self.textLine2.setText(name)
 
     def executescript(self):
-        if file_location is None or check_location is None :
-            return "File name or check location needs to be specified"
-        else:
+        self.button.setText("processing")
+        script = "python transform_video.py --in-path " +  self.textLine1.text() + " " + "--checkpoint " + self.textLine2.text() + " " +  "--out-path video.mp4 " + "--batch-size 4"
+        
+        if original_colors == True:
+            script = script + " --original_colors True"
+        #print(script)
+        subprocess.call(script)
+        self.button.setText("Done")
 
-            script = "python transform_video.py --in-path " +  file_location + " " + "--checkpoint " + check_location + " " +  "--out-path styled-videps/video.mp4 " + "--batch-size 4"
-            #script = ""
-            subprocess.call([script])
-            return None    
+
+
+    
 
     
 
